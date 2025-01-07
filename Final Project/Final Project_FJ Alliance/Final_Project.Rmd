@@ -1,0 +1,151 @@
+---
+title: "Final Project"
+output: html_document
+date: "2024-12-05"
+Team: FJ Alliance
+Team Member: Yunzhe Yu, Lves He, Hanbin Yan
+---
+
+```{r}
+# Load necessary libraries
+library(tidyverse)
+library(caret)
+library(randomForest)
+
+# Define helper functions
+Mode <- function(x) {
+  ux <- unique(x[!is.na(x)])
+  ux[which.max(tabulate(match(x, ux)))]
+}
+
+normalize <- function(x) {
+  return((x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE)))
+}
+
+handle_outliers <- function(x) {
+  Q1 <- quantile(x, 0.25, na.rm = TRUE)
+  Q3 <- quantile(x, 0.75, na.rm = TRUE)
+  IQR_value <- Q3 - Q1
+  x[x < (Q1 - 1.5 * IQR_value)] <- NA
+  x[x > (Q3 + 1.5 * IQR_value)] <- NA
+  return(x)
+}
+
+# Load datasets
+codebook <- read.csv("https://raw.githubusercontent.com/iveshe999/portfolio/refs/heads/main/codebook.csv")
+historic_data <- read.csv("https://raw.githubusercontent.com/iveshe999/portfolio/refs/heads/main/historic_property_data.csv")
+predict_data <- read.csv("https://raw.githubusercontent.com/iveshe999/portfolio/refs/heads/main/predict_property_data.csv")
+
+# Ensure critical columns exist
+if (!"sale_price" %in% names(historic_data)) stop("Sales price column is missing!")
+if (!"pid" %in% names(predict_data)) stop("PID column is missing!")
+
+# **1. Data Cleaning (applies to historic_data and predict_data)**
+clean_data <- function(data) {
+  data <- data %>%
+    mutate(
+      # Fill missing numeric values with the median
+      across(where(is.numeric), ~ ifelse(is.na(.), median(., na.rm = TRUE), .)),
+      
+      # Fill missing character values with the mode
+      across(where(is.character), ~ ifelse(is.na(.), Mode(.), .)),
+      
+      # Fill missing logical values with FALSE
+      across(where(is.logical), ~ ifelse(is.na(.), FALSE, .))
+    )
+  return(data)
+}
+
+# Apply the same cleaning process to historic_data and predict_data
+historic_data <- clean_data(historic_data)
+predict_data <- clean_data(predict_data)
+
+# Ensure the target variable in historic_data has no missing or invalid values
+historic_data <- historic_data %>% filter(!is.na(sale_price) & sale_price > 0)
+
+# Split the dataset into training and testing sets
+set.seed(123)
+train_index <- createDataPartition(historic_data$sale_price, p = 0.8, list = FALSE)
+train_data <- historic_data[train_index, ]
+test_data <- historic_data[-train_index, ]
+
+# Apply log transformation to the target variable
+train_data$sale_price <- log(train_data$sale_price)
+test_data$sale_price <- log(test_data$sale_price)
+
+# **2. Random Forest Feature Importance**
+set.seed(123)
+rf_model <- randomForest(
+  sale_price ~ ., 
+  data = train_data, 
+  ntree = 5,
+  importance = TRUE
+)
+# Extract feature importance and select the top N features
+feature_importance <- importance(rf_model)
+important_features_rf <- rownames(feature_importance)[order(feature_importance[, 1], decreasing = TRUE)]
+
+top_n <- 30  # Select the top 30 features
+selected_features_rf <- important_features_rf[1:min(top_n, length(important_features_rf))]
+
+# Retain only the selected features based on Random Forest importance
+train_data_rf <- train_data %>% select(all_of(selected_features_rf), sale_price)
+test_data_rf <- test_data %>% select(all_of(selected_features_rf), sale_price)
+
+# Print the names of selected features
+cat("Selected Features After Random Forest Feature Importance:\n")
+print(selected_features_rf)
+
+```
+
+```{r}
+# **3. Train Random Forest Model with Optimal Parameters**
+set.seed(123)
+final_rf_model <- randomForest(
+  sale_price ~ ., 
+  data = train_data_rf, 
+  mtry = 2,  # Optimal mtry
+  ntree = 10  # Optimal ntree
+)
+
+# Evaluate model performance on the test set
+test_preds <- predict(final_rf_model, newdata = test_data_rf)
+mse <- mean((test_data_rf$sale_price - test_preds)^2)
+cat("Test Set MSE:", mse, "\n")
+
+# **4. Generate Prediction File and Verify Validity**
+# Check if predict_data contains all required features
+missing_features <- setdiff(selected_features_rf, colnames(predict_data))
+if (length(missing_features) > 0) {
+  stop(paste("The prediction dataset is missing the following features:", paste(missing_features, collapse = ", ")))
+}
+
+# Get predictions from the final model
+predicted_values <- predict(final_rf_model, newdata = predict_data %>% select(all_of(selected_features_rf)))
+
+# Check and handle anomalies in predictions
+if (any(is.na(predicted_values)) || any(predicted_values < 0)) {
+  warning("Predictions contain anomalies; setting to a minimum of 0 or filling missing values!")
+  predicted_values[is.na(predicted_values) | predicted_values < 0] <- 0
+}
+
+# Create the prediction output
+output <- data.frame(
+  pid = predict_data$pid, 
+  assessed_value = exp(predicted_values)
+)
+
+# Verify the output file's validity
+if (nrow(output) != 10000) {
+  stop("The number of records in the prediction output is not 10,000!")
+}
+
+if (any(is.na(output$assessed_value)) || any(output$assessed_value < 0)) {
+  stop("The prediction output still contains missing or negative values. Please check!")
+}
+```
+```{r}
+# Save the prediction results
+write.csv(output, "assessed_value.csv", row.names = FALSE)
+cat("Prediction results have been successfully saved!\n")
+```

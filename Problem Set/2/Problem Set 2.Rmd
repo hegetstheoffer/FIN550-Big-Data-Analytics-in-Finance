@@ -1,0 +1,126 @@
+---
+title: "Problem Set 2"
+output: html_document
+date: "2024-12-06"
+---
+
+```{r}
+# Load required libraries
+library(haven)
+library(dplyr)
+library(ggplot2)
+
+# Function to calculate mortality rate per 100,000 person-years
+calculate_mortality_rate <- function(deaths, population) {
+  return(100000 * deaths / (population / 12))
+}
+
+# Read the data
+download.file("https://github.com/reifjulian/driving/raw/main/data/mortality/derived/all.dta", destfile = "all.dta")
+data <- read_dta("all.dta")
+
+# Add mortality rates to the dataset
+data <- data %>%
+  mutate(
+    mort_rate_any = calculate_mortality_rate(cod_any, pop),
+    mort_rate_mva = calculate_mortality_rate(cod_MVA, pop)
+  )
+```
+
+
+```{r}
+# Question 1: Calculate mortality rates 1-24 months above/below MLDA
+mortality_comparison <- data %>%
+  filter(abs(agemo_mda) <= 24, agemo_mda != 0) %>%
+  group_by(group = ifelse(agemo_mda > 0, "Above MLDA", "Below MLDA")) %>%
+  summarize(
+    avg_mortality = mean(mort_rate_any),
+    n = n()
+  )
+
+print("Mortality Rate Comparison (1-24 months from MLDA):")
+print(mortality_comparison)
+```
+
+
+```{r}
+# Question 2: Create scatter plot
+ggplot(data %>% filter(abs(agemo_mda) <= 24)) +
+  geom_point(aes(x = agemo_mda, y = mort_rate_any), 
+             shape = 15, color = "black") +
+  geom_point(aes(x = agemo_mda, y = mort_rate_mva), 
+             shape = 16, color = "blue") +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
+  labs(
+    x = "Months from MLDA",
+    y = "Deaths per 100,000 person-years",
+    title = "Mortality Rates Around Minimum Legal Driving Age"
+  ) +
+  theme_minimal()
+
+# Function for non-parametric RD estimation
+rd_nonparametric <- function(data, bandwidth) {
+  data %>%
+    filter(abs(agemo_mda) <= bandwidth, agemo_mda != 0) %>%
+    group_by(treated = agemo_mda > 0) %>%
+    summarize(
+      mean_any = mean(mort_rate_any),
+      mean_mva = mean(mort_rate_mva)
+    ) %>%
+    summarize(
+      rd_estimate_any = diff(mean_any),
+      rd_estimate_mva = diff(mean_mva)
+    )
+}
+
+# Function for parametric RD estimation
+rd_parametric <- function(data, bandwidth) {
+  subset_data <- data %>%
+    filter(abs(agemo_mda) <= bandwidth, agemo_mda != 0)
+  
+  model_any <- lm(mort_rate_any ~ agemo_mda * I(agemo_mda > 0), data = subset_data)
+  model_mva <- lm(mort_rate_mva ~ agemo_mda * I(agemo_mda > 0), data = subset_data)
+  
+  return(c(
+    coef(model_any)["I(agemo_mda > 0)TRUE"],
+    coef(model_mva)["I(agemo_mda > 0)TRUE"]
+  ))
+}
+
+# Calculate RD estimates for different bandwidths
+bandwidths <- c(48, 24, 12, 6)
+```
+
+
+```{r}
+# Question 3: Non-parametric RD estimates
+nonparam_results <- lapply(bandwidths, function(b) rd_nonparametric(data, b))
+nonparam_table <- data.frame(
+  Bandwidth = bandwidths,
+  All_Cause = sapply(nonparam_results, function(x) x$rd_estimate_any),
+  MVA = sapply(nonparam_results, function(x) x$rd_estimate_mva)
+)
+
+print("\nNon-parametric RD Estimates:")
+print(nonparam_table)
+
+```
+
+
+```{r}
+# Question 4: Parametric RD estimates
+param_results <- t(sapply(bandwidths, function(b) rd_parametric(data, b)))
+param_table <- data.frame(
+  Bandwidth = bandwidths,
+  All_Cause = param_results[,1],
+  MVA = param_results[,2]
+)
+
+print("\nParametric RD Estimates:")
+print(param_table)
+```
+
+
+
+
+

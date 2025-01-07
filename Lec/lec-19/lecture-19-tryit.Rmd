@@ -1,0 +1,98 @@
+---
+title: "Lecture 19"
+subtitle: "Limitations of randomized experiments"
+---
+
+
+# Function to create a simulated dataset 
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(broom)
+
+# Function to create dataset with N observations
+data_sample <- function(N = 100, beta0 = 10, beta1 = 1, beta2 = 0.1, sd_e = 3) {
+  data <- tibble(
+    age   = sample(seq(18,100), N, replace=T),
+    treat = sample(c(0,1), N, replace=T),
+    spending = beta0 + beta1*treat + beta2*age + rnorm(N, mean = 0, sd = sd_e))
+  
+  data <- data %>% relocate(spending, .before = age)
+  
+  return(data)
+}
+```
+
+---
+
+# Create and inspect dataset
+
+```{r}
+set.seed(10)
+df <- data_sample(N=100)
+
+summary(df$spending)
+cat("\n")
+head(df)
+```
+
+
+---
+
+# Try it: balance test for age
+
+```{r}
+
+# Calculate mean of age, for control and treatment groups
+
+
+
+
+
+# Calculate the difference in means for age (treat - control)
+
+
+```
+
+
+---
+
+# Balance test for age: regression
+
+```{r c1, eval=F}
+
+# Is the difference in age statistically significant?
+lm1 <- lm(age ~ treat, data = df)
+tidy(lm1, conf.int = T, conf.level = 0.95)
+```
+
+
+
+---
+
+# Try it: estimate the causal treatment effect
+
+```{r}
+
+# Calculate difference in means for spending (treat - control)
+
+
+
+# Use regression to estimate whether the difference statistically significant
+
+```
+
+---
+
+
+# Try again with a larger sample size
+
+```{r}
+
+# With N=1000, estimate is more precise
+set.seed(10)
+df2 <- data_sample(N=1000)
+lm3 <- lm(spending ~ treat, data=df2)
+tidy(lm3, conf.int = T, conf.level = 0.95)
+```

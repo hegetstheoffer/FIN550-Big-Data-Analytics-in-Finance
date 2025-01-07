@@ -1,0 +1,128 @@
+---
+title: "Lecture 22"
+subtitle: "Difference in differences estimation"
+---
+
+
+# Load dataset
+
+```{r, message=F}
+library(tidyverse)
+library(broom)
+df <- read_csv("soda.csv")
+
+head(df)
+```
+
+---
+
+# Try it: summary statistics
+
+```{r}
+
+# How many districts are there? 
+
+# Which districts are treated? # How many residents are in each district?
+
+```
+
+---
+
+# Plot the pre-period data
+
+```{r c1, eval=F}
+ggplot(subset(df, year %in% 2020), 
+       aes(x = soda, fill = factor(treat))) + 
+  geom_density(alpha = 0.5) + 
+  scale_fill_manual(name = " ", 
+                    values = c("#a7a8aa", "#cc0055"),
+                    labels = c("Control", "Treatment")) +
+  theme_minimal() +
+  theme(panel.grid.minor = element_blank()) +
+  theme(legend.position = "bottom") +
+  labs(title = "Soda consumption before tax",
+       x = "Soda consumption (lt)",
+       y = "Density")
+```
+
+---
+
+# Plot the post-period data
+
+```{r c2, eval=F}
+ggplot(subset(df, year %in% 2021), 
+       aes(x = soda, fill = factor(treat))) + 
+  geom_density(alpha = 0.5) + 
+  scale_fill_manual(name = " ", 
+                    values = c("#a7a8aa", "#cc0055"),
+                    labels = c("Control", "Treatment")) +
+  theme_minimal() +
+  theme(panel.grid.minor = element_blank()) +
+  theme(legend.position = "bottom") +
+  labs(title = "Soda consumption after tax",
+       x = "Soda consumption (lt)",
+       y = "Density")
+```
+
+
+
+---
+
+# Estimate difference in means for the post-period
+
+```{r }
+# Treat - control, post period: what does this estimate?
+mean(subset(df,year==2021 & treat==1)$soda) - mean(subset(df,year==2021 & treat==0)$soda)
+cat("\n")
+
+after_model <- lm(soda ~ treat, data = subset(df, year==2021))
+tidy(after_model)
+```
+
+---
+
+# Estimate Difference in Means for the pre-period
+
+```{r}
+# Treat - control, pre period: what does this estimate?
+mean(subset(df,year==2020 & treat==1)$soda) - mean(subset(df,year==2020 & treat==0)$soda)
+cat("\n")
+
+before_model <- lm(soda ~ treat, data = subset(df, year==2020))
+tidy(before_model)
+```
+
+---
+
+# Try it: estimate DD regression
+
+```{r}
+# Create POST (year=2021) and TREATxPOST dummy variables
+
+
+
+# Regress: soda = gamma1*treat + gamma2*POST + beta*TREATxPOST
+
+```
+
+---
+
+# DD estimate is difference in differences
+
+
+```{r aa1, eval=F}
+# Treat-control, after: selection bias + treatment
+diff_after <- after_model$coefficients[["treat"]]
+diff_after
+cat("\n")
+
+# Treat-control, before: selection bias
+diff_before <-before_model$coefficients[["treat"]]
+diff_before
+cat("\n")
+
+# DD: (selection bias + treatment)- selection bias
+diff_after - diff_before
+cat("\n")
+lm1$coefficients["TREATxPOST"]
+```

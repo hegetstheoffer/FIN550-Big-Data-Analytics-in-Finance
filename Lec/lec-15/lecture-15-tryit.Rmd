@@ -1,0 +1,131 @@
+---
+title: "Lecture 15"
+subtitle: "Neural networks"
+---
+
+
+---
+
+# Try it: load example dataset
+
+
+```{r, message=F}
+library(tidyverse)
+library(ggplot2)
+df <- read_csv("TinyData.csv")
+
+# Create outcome dummy variables
+df$Like <- df$Preference=="like"
+df$Dislike <- df$Preference=="dislike"
+
+df
+```
+
+
+---
+
+# Try it: estimate a neural net
+
+```{r, message=F}
+library(neuralnet)
+set.seed(1)
+
+# linear.output=TRUE for regression and linear.output=FALSE for classification
+# hidden: a vector of integers specifying the number of neurons in hidden layer
+nn1<- neuralnet(Like + Dislike ~ X1 + X2, data = df, linear.output = FALSE, hidden = 3)
+
+nn1$act.fct # display the activation function
+
+```
+
+---
+
+# Display the weights
+
+```{r b2}
+nn1$weights
+# list 1: 3x3 matrix (3 HL nodes)
+#   bias + input->hidden wts
+
+# list 2: 4x2 matrix (2 OL nodes)
+#   bias + hidden->output wts
+```
+
+
+---
+
+# Plot the neural network
+<!-- Steps: # of iterations needed for training 
+     Error: mse (I think) -->
+```{r}
+# rep="best": network with smallest error
+# See next slide for the plot
+plot(nn1, rep="best", 
+     col.intercept = "darkgoldenrod",
+     col.entry="red",  
+     col.hidden="blue",
+     col.out="green")   
+```
+
+
+---
+
+# Try it: compute predictions for an observation
+
+```{r}
+
+# First step: define function g(s) = 1/(1+e^(-s))
+g <- function(s) {
+   return(1 / (1 + exp(-s)))
+}
+g(0.2)
+
+df[1, c("X1","X2")] # Use data from first observation
+X1 <- 0.2
+X2 <- 0.9
+```
+
+
+---
+
+# Try it: compute output for hidden layer
+
+```{r}
+# list 1: 3x3 matrix (3 HL nodes)
+mat1 <- nn1$weights[[1]][[1]]
+
+# theta_j (row 1)
+theta_3 <- mat1[1,1]
+theta_4 <- mat1[1,2]
+theta_5 <- mat1[1,3]
+
+# w_ij (rows 2-3)
+w_13 <- mat1[2,1]
+w_14 <- mat1[2,2]
+w_15 <- mat1[2,3]
+w_23 <- mat1[3,1]
+w_24 <- mat1[3,2]
+w_25 <- mat1[3,3]
+```
+
+
+---
+
+# Try it: compute output for hidden layer
+
+$$g(\theta_j + \sum_{i=1}^{p}w_{ij} X_i) = \frac{1}{1+e^{-(\theta_j + \sum_{i=1}^{p}w_{ij} X_i))}}$$
+
+```{r, eval=F}
+# Compute output for node j=3
+output_3 <- 
+output_3
+
+# Compute output for node j=4
+output_4 <- 
+output_4
+
+# Compute output for node j=5
+output_5 <- 
+output_5
+```
+

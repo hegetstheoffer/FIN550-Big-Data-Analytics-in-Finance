@@ -1,0 +1,225 @@
+---
+title: "Project 1"
+output: html_document
+date: "2024-11-08"
+---
+
+Q3
+What do “treatment” and “control” mean in the context of this study? How does this differ from the definition of a “participant” and “non-participant”? How many employees were in the treatment group, and how many in the control group? Of those in the treatment group, how many participated in the initial (screening) segment of the wellness program in the first year? The answer to this question can be found in the publications of the Illinois Workplace Wellness Study, but use the public-use data (described in Section 3) to form your answers.
+```{r}
+# Load necessary libraries
+suppressPackageStartupMessages(library(dplyr))
+library(haven)
+
+# Load data
+claims <- read_dta("https://reifjulian.github.io/illinois-wellness-data/data/stata/claims.dta")
+
+
+# Define "treatment" and "control" groups from the claims dataset 
+# (assuming treat column: 1 = treatment group, 0 = control group)
+treatment_group <- filter(claims, treat == 1)
+control_group <- filter(claims, treat == 0)
+
+# Count the number of employees in each group
+n_treatment <- nrow(treatment_group)
+n_control <- nrow(control_group)
+
+# Identify employees in the treatment group who participated in the initial (first-year) screening
+# Assuming the claims dataset includes a column `completed_screening_nomiss_2016` indicating 2016 screening participation
+initial_screening <- filter(claims, treat == 1 & !is.na(completed_screening_nomiss_2016) & completed_screening_nomiss_2016 == 1)
+n_participants_initial_screening <- nrow(initial_screening)
+
+# Define explanations for treatment, control, and participant
+treatment_definition <- "Treatment group: employees offered the wellness program"
+control_definition <- "Control group: employees not offered the wellness program"
+participant_definition <- "Participant: treatment group employee who took part in initial screening"
+
+# Print results with explanations
+list(
+  treatment_definition = treatment_definition,
+  control_definition = control_definition,
+  participant_definition = participant_definition,
+  treatment_group_count = n_treatment,
+  control_group_count = n_control,
+  initial_screening_participants = n_participants_initial_screening
+)
+
+```
+
+Answer:
+In the Illinois Workplace Wellness Study, the "treatment" group refers to employees offered the wellness program, while the "control" group includes employees not offered it. A "participant" is a treatment group employee who took part in the initial screening. The treatment and control groups had 3,300 and 1,534 employees, respectively, with 1,900 participating in the initial screening.
+
+
+Q4
+Find the “claims” dataset in the public use data repository. For each outcome in the claims dataset, as measured pre-randomization (i.e., prior to August 2016), report the following in a four-column table (one row per outcome): column (1) Variable description; column (2) Control group mean; column (3) Treatment group mean; and column (4) p-value on the difference. Use linear regression to calculate all these values, and report and describe this equation in your answer below. Do the results in this table support or undermine the claim that treatment group assignment was random?
+```{r}
+# Load necessary library
+library(dplyr)
+
+# Filter the claims dataset for pre-randomization outcomes before "0716"
+pre_randomization_outcomes <- claims %>%
+  select(contains("0715"), contains("0716"))
+
+# Define a function to calculate control and treatment group means and p-values for each variable
+calculate_means_pvalues <- function(data, outcome_var) {
+  # Fit a linear regression model with 'treat' as the independent variable
+  model <- lm(as.formula(paste(outcome_var, "~ treat")), data = data)
+  
+  # Extract control group mean (intercept), treatment group mean (intercept + treat coefficient), and p-value
+  control_mean <- coef(model)[1]  # Intercept, representing control group mean
+  treatment_mean <- coef(model)[1] + coef(model)[2]  # Control mean + treat coefficient, representing treatment group mean
+  p_value <- summary(model)$coefficients[2, 4]  # p-value for the 'treat' coefficient
+  
+  # Return a named vector with the variable name, control mean, treatment mean, and p-value
+  return(c(variable = outcome_var, control_mean = control_mean, 
+           treatment_mean = treatment_mean, p_value = p_value))
+}
+
+# Apply the function to each pre-randomization variable and store the results in a table
+results <- as.data.frame(do.call(rbind, lapply(names(pre_randomization_outcomes), function(var) {
+  calculate_means_pvalues(claims, var)
+})))
+
+# Convert p-value column to numeric for further calculations
+results$p_value <- as.numeric(results$p_value)
+
+# Calculate the proportion of variables with p-values less than 0.05
+proportion_significant <- mean(results$p_value < 0.05)
+
+# Display the results table and the proportion of significant p-values
+print(results)
+cat("Proportion of variables with p-values < 0.05:", proportion_significant)
+
+
+```
+
+Answer:
+For each pre-randomization outcome in the Illinois Workplace Wellness Study, a linear regression was used to estimate the control mean, treatment mean, and p-value for the difference. With no significant p-values (<0.05), the data supports that the treatment assignment was random, showing no systematic pre-existing differences between groups.
+
+
+Q5
+For each outcome in the “claims” dataset, as measured in the first year following randomization, report the following in a three-column table (one row per outcome): column (1) Variable description, column (2) estimated difference between treatment and control groups (no demographic controls) along with standard error in parentheses, column (3) estimated difference between treatment and control groups (with demographic controls) along with standard error in parentheses. Your demographic controls should include indicator variables for sex (male/female), race (white/nonwhite), middle age group (37-49/not 37-49), and oldest age group (50+/not 50+). Use linear regression to calculate all these values, and report and describe this equation in your answer below. What do these estimates indicate about causal treatment effects or selection bias? Should we expect the estimates to differ much between columns (2) and (3)?
+```{r}
+# Load necessary libraries
+library(dplyr)
+
+# Specify demographic controls
+demographic_controls <- c("male", "white", "age37_49", "age50")
+
+# Define a function to calculate estimated differences with and without demographic controls
+calculate_differences <- function(data, outcome_var) {
+  # Model without demographic controls
+  model_no_controls <- lm(as.formula(paste(outcome_var, "~ treat")), data = data)
+  est_diff_no_controls <- summary(model_no_controls)$coefficients["treat", 1]
+  se_no_controls <- summary(model_no_controls)$coefficients["treat", 2]
+  
+  # Model with demographic controls
+  formula_with_controls <- as.formula(paste(outcome_var, "~ treat +", paste(demographic_controls, collapse = " + ")))
+  model_with_controls <- lm(formula_with_controls, data = data)
+  est_diff_with_controls <- summary(model_with_controls)$coefficients["treat", 1]
+  se_with_controls <- summary(model_with_controls)$coefficients["treat", 2]
+  
+  # Calculate the absolute difference between estimates (optional, for analysis)
+  est_diff_difference <- abs(est_diff_no_controls - est_diff_with_controls)
+  
+  # Return results for both models, formatted as required
+  return(c(
+    variable = outcome_var,
+    diff_no_controls = paste0(round(est_diff_no_controls, 4), " (", round(se_no_controls, 4), ")"),
+    diff_with_controls = paste0(round(est_diff_with_controls, 4), " (", round(se_with_controls, 4), ")"),
+    est_diff_difference = est_diff_difference  # For interpretation
+  ))
+}
+
+# Filter for the columns representing the first year following "0816" in the claims dataset
+first_year_outcomes <- claims %>%
+  select(
+    "covg_0816_0717", "diabetes_0816_0717", "hyperlipidemia_0816_0717", 
+    "hypertension_0816_0717", "nonzero_spend_0816_0717", "pcp_any_office_0816_0717", 
+    "pcp_any_visits_0816_0717", "pcp_total_office_0816_0717", "pcp_total_visits_0816_0717", 
+    "pos_er_critical_0816_0717", "pos_hospital_0816_0717", "pos_office_outpatient_0816_0717", 
+    "spendHosp_0816_0717", "spendOff_0816_0717", "spendRx_0816_0717", "spend_0816_0717"
+  )
+
+# Apply the function to each outcome variable and compile results
+results <- as.data.frame(do.call(rbind, lapply(names(first_year_outcomes), function(var) {
+  calculate_differences(claims, var)
+})))
+
+# Convert est_diff_difference to numeric for further analysis
+results$est_diff_difference <- as.numeric(results$est_diff_difference)
+
+# Display the results table and calculate the average difference between columns (2) and (3)
+print(results)
+cat("Average absolute difference between estimates with and without controls:", mean(results$est_diff_difference), "\n")
+```
+
+Answer:
+The regression results indicate minimal differences between estimates with and without demographic controls, with an average difference of 0.89. This suggests that adding demographic controls has limited impact, implying minimal selection bias and supporting the assumption that treatment assignment effects are causal.
+
+
+Q6
+For each outcome in the “claims” dataset, as measured in the first year following randomization, report the following in a three-column table (one row per outcome): column (1) Variable description, column (2) estimated difference between participants and non-participants (no demographic controls) along with standard error in parentheses, column (3) estimated difference between participants and non-participants (with demographic controls) along with standard error in parentheses. Your demographic controls should include indicator variables for sex (male/female), race (white/nonwhite), middle age group (37-49/not 37-49), and oldest age group (50+/not 50+). Use linear regression to calculate all these values, and report and describe this equation in your answer below. What do these estimates indicate about causal treatment effects or selection bias? Should we expect the estimates to differ much between columns (2) and (3)?
+```{r}
+# Load necessary libraries
+library(dplyr)
+
+# Assume that participation is indicated by non-missing values in the initial screening column
+# Here, we use 'hra_c_yr1' as a proxy for participation, creating a 'participant' column
+claims <- claims %>%
+  mutate(participant = ifelse(!is.na(hra_c_yr1) & hra_c_yr1 == 1, 1, 0))
+
+# Specify demographic controls
+demographic_controls <- c("male", "white", "age37_49", "age50")
+
+# Define a function to calculate estimated differences between participants and non-participants with and without demographic controls
+calculate_participation_differences <- function(data, outcome_var) {
+  # Model without demographic controls
+  model_no_controls <- lm(as.formula(paste(outcome_var, "~ participant")), data = data)
+  est_diff_no_controls <- summary(model_no_controls)$coefficients["participant", 1]
+  se_no_controls <- summary(model_no_controls)$coefficients["participant", 2]
+  
+  # Model with demographic controls
+  formula_with_controls <- as.formula(paste(outcome_var, "~ participant +", paste(demographic_controls, collapse = " + ")))
+  model_with_controls <- lm(formula_with_controls, data = data)
+  est_diff_with_controls <- summary(model_with_controls)$coefficients["participant", 1]
+  se_with_controls <- summary(model_with_controls)$coefficients["participant", 2]
+  
+  # Calculate the absolute difference between estimates (optional, for analysis)
+  est_diff_difference <- abs(est_diff_no_controls - est_diff_with_controls)
+  
+  # Return results for both models, formatted as required
+  return(c(
+    variable = outcome_var,
+    diff_no_controls = paste0(round(est_diff_no_controls, 4), " (", round(se_no_controls, 4), ")"),
+    diff_with_controls = paste0(round(est_diff_with_controls, 4), " (", round(se_with_controls, 4), ")"),
+    est_diff_difference = est_diff_difference  # For interpretation
+  ))
+}
+
+# Filter for columns representing the first year following "0816" in the claims dataset
+first_year_outcomes <- claims %>%
+  select(
+    "covg_0816_0717", "diabetes_0816_0717", "hyperlipidemia_0816_0717", 
+    "hypertension_0816_0717", "nonzero_spend_0816_0717", "pcp_any_office_0816_0717", 
+    "pcp_any_visits_0816_0717", "pcp_total_office_0816_0717", "pcp_total_visits_0816_0717", 
+    "pos_er_critical_0816_0717", "pos_hospital_0816_0717", "pos_office_outpatient_0816_0717", 
+    "spendHosp_0816_0717", "spendOff_0816_0717", "spendRx_0816_0717", "spend_0816_0717"
+  )
+
+# Apply the function to each outcome variable and compile results
+results <- as.data.frame(do.call(rbind, lapply(names(first_year_outcomes), function(var) {
+  calculate_participation_differences(claims, var)
+})))
+
+# Convert est_diff_difference to numeric for further analysis
+results$est_diff_difference <- as.numeric(results$est_diff_difference)
+
+# Display the results table and calculate the average difference between columns (2) and (3)
+print(results)
+cat("Average absolute difference between estimates with and without controls:", mean(results$est_diff_difference), "\n")
+
+```
+
+Answer:
+The regression analysis shows a small average absolute difference (1.21) between estimates with and without demographic controls, suggesting that adding controls has limited effect on estimated differences between participants and non-participants. This implies minimal selection bias, supporting the assumption that observed differences are due to treatment effects.

@@ -1,0 +1,163 @@
+---
+title: "Lecture 12"
+subtitle: "Lasso regression"
+
+---
+
+
+---
+
+# Try it: simulated data
+
+```{r, message=F}
+library(tidyverse)
+
+set.seed(1)
+nrows <- 100
+
+# Create 10 random variables (X1...X10), each distributed Normal(0,1)
+sim_data <- data.frame(replicate(10, rnorm(nrows,0,1) ))
+
+# Simulated model: only two X vars are predictive of Y
+# Y = 12 + 3*X1 + 4*X2 + error
+sim_data$y <- 12 + 3*sim_data$X1 + 4*sim_data$X2 + rnorm(nrows, mean=0, sd=1)
+
+```
+
+
+
+---
+
+# Try it: prepare data for lasso regression
+
+```{r, message =F, results=F}
+library(glmnet)
+
+# y vector
+y <- sim_data$y
+
+# x matrix with all X variables
+f <- formula(y ~ 0 + .) # exclude intercept (`glmnet` will include one for us)
+x <- model.matrix(f, data = sim_data)
+head(x)
+
+```
+
+---
+
+# Try it: run lasso regression and display lambdas
+
+```{r b1, eval=F}
+
+# Estimate lasso regression
+cvfit <- cv.glmnet(x=x, y=y)
+
+# Different lambdas considered by `cv.glmnet()` are stored in vector `cvfit$lambda`
+length(cvfit$lambda)
+cat("\n")
+cvfit$lambda
+```
+
+
+
+---
+
+# Try it: inspect the optimal lambda
+
+```{r c1, eval=F}
+
+# Two definitions of optimal lambda: "min" and "1se". We will always use "min"
+cvfit
+cat("\n")
+cvfit$lambda.min
+
+```
+
+
+---
+
+# Try it: consider three extremes for lambda
+
+- Usually we are only interested in the optimal lambda
+- To learn about lasso, we will also inspect other lambdas
+
+```{r d1, eval=F}
+
+lambda.largest <- max(cvfit$lambda)
+lambda.smallest <- min(cvfit$lambda)
+lambda.best <- cvfit$lambda.min # Lambda with the smallest cross-validated MSE
+
+lambda.largest
+lambda.smallest
+lambda.best
+```
+
+
+
+
+---
+
+# Try it: coefficient estimates for largest lambda
+
+
+```{r b7, eval=F}
+# How many coefficients are non-zero? Why?
+coef.largest <- coef(cvfit, 
+                     s = lambda.largest)
+
+coef.largest
+```
+
+
+
+
+
+---
+
+# Try it: coefficient estimates for smallest lambda
+
+```{r, eval=F}
+# How many coefficients are non-zero? Why?
+coef.smallest <- 
+
+
+coef.smallest
+```
+
+
+
+
+
+
+---
+
+# Try it: coefficient estimates for optimal lambda
+
+
+```{r, eval=F}
+# Which coefficients are non-zero?
+coef.best <-
+
+coef.best
+```
+
+
+---
+
+
+# Try it: optimal lambda was selected using cross-validation
+
+<!-- Top axis of plot(cvfit) reports degrees of freedom -->
+
+
+```{r b5, eval=F}
+# Plot cv mse for each lambda (log scale)
+plot(cvfit, cex.lab=1.5, cex.axis=1.5)
+```
+
+```{r, eval=F}
+# First vertical line is log(best lambda)
+lambda.best
+log(lambda.best)
+```
+

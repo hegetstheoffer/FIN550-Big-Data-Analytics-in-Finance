@@ -1,0 +1,140 @@
+---
+title: "Lecture 13"
+subtitle: "Regression and classification trees"
+---
+
+
+---
+
+# Try it: load and inspect the Boston housing dataset
+
+```{r, message=F}
+
+library(tidyverse)
+library(ggplot2)
+
+# Housing information for 506 areas around Boston
+housing <- read_csv('/Users/iveshe/Library/Mobile Documents/com~apple~CloudDocs/Term 1/FIN 550/Lec/lec-13/housing.csv') %>%
+  select(MEDV, CRIM, NOX, RM, TAX)
+nrow(housing)
+ncol(housing)
+
+sum(!complete.cases(housing)) # Check for missing values
+```
+
+---
+
+
+
+# Try it: build a regression tree
+
+```{r, results=F, fig.show="hide"}
+library(rpart)
+library(rpart.plot)
+
+# method="anova" for regression trees
+# Set cp (alpha) equal to 0 to grow a full tree
+# (Optional) set maxdepth=5 to limit how deep the tree is
+set.seed(1)
+tree_housing <- rpart(MEDV ~ ., data = housing, cp = 0, 
+                      maxdepth = 5, method = "anova")
+
+# Plot the full tree 
+prp(tree_housing, box.palette = "auto")
+
+# What does tree look like if you remove `maxdepth=5`?
+```
+
+
+
+---
+
+# Try it: number of leaves and variable importance
+
+```{r }
+# Number of leaves/nodes
+n_distinct(tree_housing$where) # `where` reports which leaf each obs was assigned to
+
+# List variables that are most important for predicting outcomes
+# Do these variables lie near the top or the bottom of the tree?
+round(tree_housing$variable.importance,1)
+```
+
+
+---
+
+# Try it: identify the vector of alpha's
+
+
+```{r, results=F}
+cp <- printcp(tree_housing)
+
+head(cp) # CP is alpha, xerror is CV MSE
+cat("\n")
+as.vector(cp[,1]) # set of alpha's considered by `rpart`
+```
+
+
+---
+
+# Try it: identify the min CV MSE and the optimal alpha
+
+
+```{r, eval=F}
+# Use cp object to identify minimum CV MSE
+cvmse.min <- min(cp[ , "xerror"])
+# Use cp object to identify optimal alpha (hint: use `which.min()` to find the index)
+index <- which.min(cp[ , "xerror"])
+alpha.best <- cp[index,"CP"]
+print(paste("Min CV MSE is", cvmse.min))
+print(paste("Optimal alpha is", alpha.best))
+```
+
+
+---
+
+# Try it: plot CV MSE vs alpha
+
+```{r, eval=F}
+df <- as.data.frame(cp)
+ggplot(df, aes(x=-log(CP), y=xerror)) + 
+  geom_point(size=2) + 
+  theme_bw() +
+  theme(axis.title=element_text(size=24))+
+  theme(axis.text=element_text(size=20))+
+  geom_vline(xintercept = 
+               -log(alpha.best))
+```
+```{r, eval=F}
+-log(alpha.best)
+```
+
+
+
+---
+
+# Try it: prune the tree
+
+```{r, eval=F}
+prune_housing <- prune(tree_housing, cp = alpha.best)
+
+# What happened to the number of leaves?
+n_distinct(tree_housing$where)
+n_distinct(prune_housing$where)
+```
+
+
+```{r, eval=F}
+# Plot the pruned tree
+prp(prune_housing, box.palette = "auto")
+```
+
+```{r}
+# Create a vector of predicted housing values
+medv_predict <- predict(prune_housing, newdata = housing)
+length(medv_predict)
+nrow(housing)
+# MSE
+mean((medv_predict - housing$MEDV)^2)
+```
+

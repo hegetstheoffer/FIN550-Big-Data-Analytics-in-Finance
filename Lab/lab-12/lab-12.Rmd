@@ -1,0 +1,119 @@
+---
+title: "Lab 12 - Lasso Regression"
+author: Ives He
+output:
+  html_document:
+---
+
+```{r global_options, include = FALSE}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+```
+
+## 0 load the packages 
+```{r}
+library(glmnet)
+library(ggplot2)
+library(tibble)
+library(tidyr)
+```
+
+## 1 create a data frame
+```{r}
+# load the data 
+df <- read.csv('/Users/iveshe/Library/Mobile Documents/com~apple~CloudDocs/Term 1/FIN 550/Lab/lab-12/Hitters.csv')
+# first six rows
+head(df)
+# column names
+names(df)
+# dimension 
+dim(df)
+# number of rows with missing values 
+sum(is.na(df))
+```
+
+## 2 remove rows that have missing values in any variable  
+```{r}
+# remove rows with any missing values 
+df <- na.omit(df)
+# dimension 
+dim(df)
+# number of missing values 
+sum(is.na(df))
+```
+
+## 3 convert a data frame of predictors to a matrix 
+```{r}
+# convert a data frame of predictors to a matrix and create dummy variables for character variables 
+x <- model.matrix(Salary ~ 0 + ., data = df)
+# first six rows of x
+head(x)
+# outcome variable
+y <- df$Salary
+```
+
+
+## 4 Fit a lasso regression model
+```{r}
+# fit a lasso regression model 
+fit <- cv.glmnet(x, y, alpha = 1)
+# Display the sequence of lambda values 
+fit$lambda
+# Save the smallest, optimal, and largest lambdas
+lambda.large <- max(fit$lambda)
+lambda.best <- fit$lambda.min
+lambda.small <- min(fit$lambda)
+
+lambda.large
+lambda.best
+lambda.small
+```
+
+## 5 model with a small lambda value 
+```{r}
+# Display plot of coefficients
+betas <- as.matrix(fit$glmnet.fit$beta)
+lambdas <- fit$lambda
+betas_df <- as.data.frame(betas)
+betas_df <- tibble::rownames_to_column(betas_df, "variable")
+betas_long <- pivot_longer(betas_df, cols = -variable, names_to = "lambda", values_to = "value")
+betas_long$lambda <- as.numeric(lambdas[match(betas_long$lambda, colnames(betas))])
+
+betas_long <- na.omit(betas_long)
+
+ggplot(betas_long, aes(x = lambda, y = value, color = variable)) +
+  geom_line() +
+  scale_x_log10() +
+  labs(x = "Lambda (log scale)", y = "Coefficient Value", title = "Lasso Regression Coefficients as a Function of Lambda") +
+  theme_minimal() +
+  theme(legend.position = "right", legend.box = "vertical", legend.text = element_text(size = 9), legend.title = element_blank(), plot.title = element_text(hjust = 0.5, size = 12))
+```
+
+Explain the patterns that you see. What happens to the magnitudes of the coefficients (y-axis values) as you move from left to right along the x-axis? Why?
+
+As lambda increases, Lasso regression coefficients shrink, and less significant variables are eliminated. Small lambda values yield large coefficients, fitting many variables. As lambda grows, coefficients decrease, simplifying the model by penalizing less important predictors until many coefficients reach zero, reducing model complexity and overfitting.
+
+## 6 Cross-validated mean-squared error for lambdas
+```{r}
+# CV MSE for large, small, and best lambdas
+mse.large <- mean((y - predict(fit, s = lambda.large, newx = x))^2)
+mse.best <- mean((y - predict(fit, s = lambda.best, newx = x))^2)
+mse.small <- mean((y - predict(fit, s = lambda.small, newx = x))^2)
+
+mse.large
+mse.best
+mse.small
+```
+
+Which one is smallest? Explain why.
+
+
+The smallest MSE is for the small lambda (92061.46) because it minimizes regularization, fitting the data more flexibly. This results in better training error but may risk overfitting and poorer generalization on new data.
+
+## 7 Predicted values
+```{r}
+# Predict salaries and store in yhat
+df$yhat <- predict(fit, s = lambda.best, newx = x)
+# MSE of predictions
+mse.predictions <- mean((df$Salary - df$yhat)^2)
+mse.predictions
+```

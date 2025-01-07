@@ -1,0 +1,149 @@
+---
+title: "Lecture 24"
+subtitle: "Regression discontinuity estimation"
+---
+
+# Load the data
+
+```{r, message=F}
+library(tidyverse)
+library(broom)
+df <- read_csv("exam.csv")
+
+head(df)
+
+```
+
+---
+
+# Try it: scatterplot of the data
+
+```{r , eval=F}
+# Scatterplot of Score (x) vs Income (y)
+# Use geom_point() for the scatter plot
+# Use geom_vline() to add vertical line at 
+#    xintercept=50
+library(ggplot2)
+ggplot(  , aes( )) +
+ 
+
+```
+
+
+---
+
+# Try it: local (non-parametric) RD
+
+- Calculate Difference in Means using just the `50-54` and `45-49` data points
+
+
+```{r, eval=F}
+
+# Income (Score = 50) - Income(Score = 45)
+diff_means <- 
+
+```
+
+
+---
+
+# Try it: global (parametric) RD with no curve
+
+- Calculate Difference in Means using **all data points**
+
+
+```{r, eval=F}
+# Create a Treat variable equal to 1 if Score>=50, 0 otherwise
+df$Treat <- 
+
+# Mean income (Treat=1) - mean income (Treat=0)
+
+
+```
+
+
+---
+
+# Global (parametric) RD with no curve
+
+- Can also be calculated using linear regression
+
+$$Income = \alpha + \rho Treat + \epsilon$$
+
+```{r c3, eval=F}
+# regress Income on treat
+RD <- lm(Income ~ Treat, data=df)
+tidy(RD)
+```
+
+
+---
+
+# Estimate an RD with a linear curve
+
+$$Income = \alpha + \rho Treat + \gamma Score + \epsilon$$
+
+- Is the estimate statistically significant?
+
+--
+
+```{r, eval=F}
+
+# regress Income on Treat and Score
+RD_lin <- lm(Income ~ Treat + Score, data=df)
+tidy(RD_lin)
+
+```
+
+
+
+---
+
+# Let the linear slope differ on either side of cutoff
+
+$$Y = \alpha + \rho T + \gamma_1 X + \gamma_2 T\times (X - Cut) + \epsilon$$
+
+```{r c4, eval=F}
+df$TreatScore50 <- df$Treat*(df$Score-50)
+RD_lin_differ <- lm(Income ~ Treat + Score + TreatScore50, data=df)
+tidy(RD_lin_differ)
+```
+
+
+---
+
+# Use a bandwidth of 25
+
+```{r c5, eval=F}
+RD_lin_differ_bw25 <- lm(Income ~ Treat + Score + TreatScore50, 
+                         data=subset(df,abs(Score-50) <= 25)) #<<
+tidy(RD_lin_differ_bw25)
+```
+
+
+---
+
+# Use a quadratic curve
+
+```{r c6, eval=F}
+# Does this affect the estimate much?
+RD_quad <- lm(Income ~ Treat + poly(Score,2), data=df)
+tidy(RD_quad)
+```
+
+
+---
+
+# Compare estimates
+
+
+```{r, eval=F}
+print(paste("Local RD estimate:", round(diff_means,2)))
+cat("\n")
+
+estimates <- list(RD, RD_lin, RD_lin_differ, RD_lin_differ_bw25, RD_quad)
+sapply(estimates, function(x) subset(tidy(x, conf.int=T), term=="TreatTRUE"))
+```
+
+
+

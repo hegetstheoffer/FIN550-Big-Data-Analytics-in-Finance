@@ -1,0 +1,92 @@
+---
+title: "Lecture 20"
+subtitle: "Application of randomized experiments to workplace wellness"
+
+---
+
+
+# Load and inspect marathon dataset
+
+
+```{r, message=F}
+library("tidyverse")
+library("haven")
+library("broom")
+marathon <- read_dta("https://reifjulian.github.io/illinois-wellness-data/data/stata/marathon.dta")
+
+mean(marathon$marathon_2017) # 6.56% of university employees participated
+head(marathon) # `hra_c_yr1` has some missing values. Why?
+```
+
+
+
+
+
+---
+
+# Balance test for method 1: male
+
+```{r}
+# Fraction male, for treatment and control group
+marathon %>%  group_by(treat) %>% summarise(mean_male = mean(male))
+
+# Is the difference statistically significant?
+cat("\n")
+tidy(lm(male ~ treat, data = marathon), conf.int = T, conf.level = 0.95)
+```
+
+
+
+---
+
+# Causal effect of program on 2017 marathon participation
+
+```{r c2}
+# Is the estimate statistically significant?
+tidy(lm(marathon_2017 ~ treat, data = marathon), conf.int = T, conf.level = 0.95)
+```
+
+
+
+
+---
+
+# Balance test for method 2: male
+
+```{r c3}
+# Fraction male, for people who chose to participate vs those who chose not to
+marathon %>% drop_na(hra_c_yr1) %>% group_by(hra_c_yr1) %>% summarise(mean_male = mean(male))
+
+# Is the difference statistically significant? What does that imply?
+cat("\n")
+tidy(lm(male ~ hra_c_yr1, data = marathon), conf.int = T, conf.level = 0.95)
+```
+
+---
+
+# Method 2: effect of program on marathon participation
+
+```{r c4}
+# Is the effect statistically significant? What does that tell us?
+tidy(lm(marathon_2017 ~ hra_c_yr1, data = marathon), conf.int = T, conf.level = 0.95)
+```
+
+
+
+---
+
+# A non-randomized study yields different conclusions!
+
+
+```{r}
+# Method 1 (randomization): no effect on marathon participation
+tidy(lm(marathon_2017 ~ treat, data = marathon), conf.int = T, conf.level = 0.95)
+
+
+# Method 2 (non-randomization): large effect on marathon participation
+cat("\n")
+tidy(lm(marathon_2017 ~ hra_c_yr1, data = marathon), conf.int = T, conf.level = 0.95)
+```
+
+
+

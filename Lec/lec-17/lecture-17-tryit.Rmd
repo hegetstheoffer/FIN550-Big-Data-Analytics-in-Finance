@@ -1,0 +1,147 @@
+---
+title: "Lecture 17"
+subtitle: "Statistical inference"
+---
+
+
+# Function to create a simulated dataset 
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(broom)
+
+# Function to create dataset with N observations
+data_sample <- function(N = 100, alpha = 0, beta = 1, sd_e = 4) {
+  data <- tibble(
+    x = runif(N, 0, 1),
+    y = alpha + beta*x + rnorm(N, mean=0, sd=sd_e) )
+  return(data)
+}
+```
+
+---
+
+# Create simulated dataset with N=100 observations
+
+```{r}
+set.seed(1) # Set a seed because the error term is random
+df100 <- data_sample(N=100)
+
+nrow(df100)
+head(df100)
+
+```
+
+---
+# Try it: estimate beta using OLS
+
+```{r, eval=F}
+# Estimate y = alpha + beta*x + e
+lm1 <- 
+  
+# What is the standard error of beta? p-val and 95% confidence interval?
+# Is the estimate statistically significant at 95% confidence level?
+tidy(lm1, conf.int = T, conf.level = 0.95)
+```
+
+
+---
+# Approximate the 95% confidence interval
+
+```{r, eval=F}
+
+beta <- lm1$coefficients["x"]
+stderr <- sqrt(diag(vcov(lm1)))["x"]
+
+# 95% confidence interval is approximately beta +/- 2 stderrs
+beta - 2*stderr
+beta + 2*stderr
+
+```
+
+---
+
+# What happens to estimates when sample size increases?
+
+```{r}
+set.seed(1)
+df1000 <- data_sample(N=1000)
+
+# Did the estimate of beta change?
+# What happened to std error, p-val, and confidence interval?
+lm2 <- lm(y ~ x, data = df1000)
+tidy(lm2, conf.int = T, conf.level = 0.95)
+```
+
+---
+
+# Write a function to automate the estimation of beta
+
+```{r}
+
+# Create a random dataset, and return the estimate of beta
+estimate_beta <- function(N = 100) {
+  df <- data_sample(N)
+  lm <- lm(y ~ x, data = df)
+  return(lm$coefficient["x"])
+}
+
+set.seed(1)
+estimate_beta()
+
+```
+
+---
+
+# Create 1000 datasets and estimate the betas
+
+```{r}
+N <- 100
+ndatasets <- 1000
+
+# Recall: lapply() is like a for loop
+set.seed(1)
+betas <- lapply(1:ndatasets, function(i) estimate_beta(N)) %>% 
+  bind_rows()
+
+nrow(betas)
+
+```
+
+---
+
+# Create 1000 datasets and estimate the betas
+
+
+```{r}
+
+ggplot(betas, aes(x=x)) + 
+  theme_bw() + 
+  geom_histogram(color="black", 
+                 fill="skyblue")
+```
+
+
+---
+
+# What happens if we increase the sample size?
+
+
+```{r}
+set.seed(1)
+N <- 1000 #<<
+betas$x2 <-lapply(1:ndatasets,
+                function(i) estimate_beta(N)) %>% 
+       bind_rows()
+
+ggplot(betas) + 
+  theme_bw() + 
+  geom_histogram(aes(x=x), alpha=0.2,
+                 color="black", 
+                 fill="skyblue") + 
+  geom_histogram(aes(x=x2$x), alpha=0.2,
+                 color="black", 
+                 fill="red")
+```
+
